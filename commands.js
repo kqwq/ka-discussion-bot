@@ -2,6 +2,7 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const { MessageEmbed, MessageAttachment } = require('discord.js')
 const { svg2png } = require('svg-png-converter')
+const { KAAS } = require('./config')
 
 let allContent = []
 let programContent = []
@@ -151,14 +152,58 @@ function capitalize(t) {
   .join(' ');
 }
 
+function updateProgram(id, newCode, newTitle, newWidth=600, newHeight=600, thumbnailPath="./blank.png") {
+  let headers = {
+    "content-type": "application/json",
+    "x-ka-fkey": `lol`,
+    "cookie": `KAAS=${KAAS}; fkey=lol`
+  };
+  let baseUrl = "https://www.khanacademy.org/api/internal";
+  console.log(id)
+  try {
+    let body = {
+      height: newWidth,
+      width: newHeight,
+      title: newTitle || "New program",
+      revision: {
+        code: newCode,
+        image_url: `data:image/png;base64,${fs.readFileSync(thumbnailPath, 'base64')}`,
+        folds: []
+      }
+    }
+    return  fetch(`${baseUrl}/scratchpads/${id}`, {
+      "headers": headers,
+      "body": JSON.stringify(body),
+      "method": "PUT",
+    })
+      .then(r => r.json());
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function partString (str, parts) {
+  const size = Math.ceil(str.length / parts)
+  const r = Array(parts)
+  let offset = 0
+  
+  for (let i = 0; i < parts; i++) {
+    r[i] = str.substr(offset, size)
+    offset += size
+  }
+  
+  return r
+}
+
 function finishFetching() {
-    console.log("done")
+    console.log("done fetching, now publishing to khanacademy.org")
+    let allContentStr = JSON.stringify(allContent, null, 2);
     allContent.sort((a, b) =>
       a.lowQualityScore > b.lowQualityScore ? 1 : -1
     );
     fs.writeFileSync(
       `${FILE_PATH}.json`,
-      JSON.stringify(allContent, null, 2),
+      allContentStr,
       "utf8"
     );
     fs.writeFileSync(
@@ -166,6 +211,12 @@ function finishFetching() {
       JSON.stringify({ lastUpdated: new Date().getTime() }, null, 2),
       "utf8"
     );
+
+    let parts = partString(allContentStr, 3)
+    updateProgram(4642706347212800, parts[0], "1")
+    updateProgram(5209553899569152, parts[1], "2")
+    updateProgram(4628192444760064, parts[2], "3")
+
 }
 
 module.exports = {
@@ -487,7 +538,7 @@ module.exports = {
 ?leaderboard - Show discussion leaderboard
 
 **Return as JSON**
-?download  ?search [word]  ?program [id]
+?download  [?search [word]](https://www.khanacademy.org/cs/-/5005389626032128)  ?program [id]
 
 **Squishy only**
 ?cringebomb  ?update  ?log  ?stop`
