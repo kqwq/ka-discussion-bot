@@ -1,0 +1,17 @@
+{
+  "name": "cringebot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "getcringe.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^12.5.3",
+    "fs": "*",
+    "node-fetch": "^2.6.1",
+    "svg-png-converter": "^0.0.9"
+  }
+}
