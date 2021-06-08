@@ -32,8 +32,8 @@
       <label for="is-multiple" class="pure-checkbox">
         <input type="checkbox" id="is-multiple" checked/>2+ posts</label>
   </fieldset>
-  <p>Red = replies to</p>
-  <p>Blue = replies from</p>
+  <p>Red = a reply to</p>
+  <p>Blue = a reply from</p>
   <div id="arc-graph-container">
     <svg id="arc-graph"></svg>
   </div>
@@ -73,7 +73,7 @@ d3.selectAll('input[type="checkbox"]').on('input', updateArcGraph);
 
 function categorizeWithPrefix(word) {
   word = word.replaceAll('.', ',')
-  if (word[0].toLowerCase() == word[0].toUpperCase()) {
+  if (!word[0].match(/[a-zA-Z]/)) {
     return "~." + word
   }
   return word[0].toUpperCase() + "." + word
