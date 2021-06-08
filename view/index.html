@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>test</title>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <link rel="stylesheet" href="./style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.6/build/pure-min.css" integrity="sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5" crossorigin="anonymous">
+
+</head>
+<body>
+  <div class="main-content">
+    <h1>Khan Academy Discussion Analytics</h1>
+    <!--a class="pure-button pure-button-primary" href="#">A Primary Button</a-->
+
+    <p>Hotlist rank</p>
+    <fieldset>
+    <div class="rangeslider">
+      <input class="min" name="range_1" type="range" min="1" max="100" value="1" />
+      <input class="max" name="range_1" type="range" min="1" max="100" value="30" />
+      <span class="range_min light left">First: #1</span>
+      <span class="range_max light right">Last: #30</span>
+    </div>
+    <label for="is-comments" class="pure-checkbox">
+    <input type="checkbox" id="is-comments" checked/>Comments</label>
+    &nbsp;
+    <label for="is-answers" class="pure-checkbox">
+      <input type="checkbox" id="is-answers" checked/>Answers</label>
+      &nbsp;
+    
+      <label for="is-multiple" class="pure-checkbox">
+        <input type="checkbox" id="is-multiple" checked/>2+ posts</label>
+  </fieldset>
+  <p>Red = simping on (This user replied to)</p>
+  <p>Blue = simps (replies to user)</p>
+  <p>Lots of blue = popular person, lots of red = justtalks a lot</p>
+  <div id="arc-graph-container">
+    <svg id="arc-graph"></svg>
+  </div>
+  </div>
+</body>
+<script>
+/* Slider */
+var minVal = 1
+var maxVal = 30
+var inData = {}
+
+function rangeInputChangeEventHandler(e){
+    var rangeGroup = d3.select(this).attr('name'),
+        minBtn = d3.select(this.parentNode).selectAll('.min'),
+        maxBtn = d3.select(this.parentNode).selectAll('.max'),
+        range_min = d3.select(this.parentNode).selectAll('.range_min'),
+        range_max = d3.select(this.parentNode).selectAll('.range_max'),
+        origin = d3.select(this).attr("class");
+    minVal = parseInt((minBtn).property("value"));
+    maxVal = parseInt((maxBtn).property("value"));
+
+    if(origin === 'min' && minVal > maxVal-1){
+        minBtn.property("value", maxVal-1);
+    }
+    range_min.html("First: #" + minVal);
+
+
+    if(origin === 'max' && maxVal-1 < minVal){
+        (maxBtn).property("value", 1+ minVal);
+    }
+    range_max.html("Last: #" + maxVal);
+}
+d3.selectAll('input[type="range"]').on( 'input', rangeInputChangeEventHandler).on('mouseup', updateArcGraph);
+d3.selectAll('input[type="checkbox"]').on('input', updateArcGraph);
+
+
+
+function categorizeWithPrefix(word) {
+  word = word.replaceAll('.', ',')
+  if (word[0].toLowerCase() == word[0].toUpperCase()) {
+    return "~." + word
+  }
+  return word[0].toUpperCase() + "." + word
+}
+
+function updateArcGraph() {
+  let allowedTypes = {
+    'answer': d3.select("#is-answers").property('checked'),
+    'comment': d3.select("#is-comments").property('checked'),
+  }
+  
+  let hotlistIds = inData.hotlistIds
+  let d = inData.posts
+  let tmpData = []
+  let doubleNicks = new Set()
+  let nicks = new Set()
+  for (let entry of d) {
+    if (entry.toNick.length === 0) continue
+    if (entry.authorNick == entry.toNick) continue // if reply to self
+    let positionOnHotlist = hotlistIds.indexOf(entry.link.split(/[/?]/)[5])
+    if (positionOnHotlist < minVal || positionOnHotlist > maxVal) continue
+    if (!allowedTypes[entry.type]) continue
+    let authorPlus = "nick." +  categorizeWithPrefix(entry.authorNick)
+    let toPlus =  "nick." + categorizeWithPrefix(entry.toNick)
+    if (nicks.has(authorPlus)) {
+      doubleNicks.add(authorPlus)
+      let match = tmpData.find(dat => dat.name === authorPlus)
+      match.size += 10 // Increase thickness of bond
+      match.imports.push(toPlus)
+    } else {
+      nicks.add(authorPlus)
+      tmpData.push({
+        name: authorPlus,
+        size: 10,
+        imports: [toPlus]
+      })
+    }
+
+    if (!nicks.has(toPlus)) {
+      if (nicks.has(toPlus)) {
+        doubleNicks.add(toPlus)
+      } else {
+        nicks.add(toPlus)
+      }
+      tmpData.push({
+        name: toPlus,
+        size: 10,
+        imports: []
+      })
+    }
+  }
+  let finalData = []
+  if (d3.select("#is-multiple").property('checked')) {
+    for (let td of tmpData) {
+      if (doubleNicks.has(td.name)) {
+        td.imports = td.imports.filter(v => doubleNicks.has(v))
+        finalData.push(td)
+      }
+    }
+  } else {
+    finalData = tmpData
+  }
+
+  data = hierarchy(finalData)
+  chart()
+}
+  
+  function getAllData() {
+    let ids = [4642706347212800, 5209553899569152, 4628192444760064]
+    let parts = new Array(ids.length).fill(0)
+    function finish() {
+        inData = JSON.parse(parts.join(""))
+        parts = []
+        updateArcGraph()
+    }
+    
+    function handlePart(d) {
+      let data = JSON.parse(JSON.parse(d))
+      parts[ids.indexOf(parseInt(data.id))] = data.revision.code
+      if (parts.every(x => x)) {
+        finish();
+      }
+    }
+    let baseUrl = "https://willard.fun/ka/program?id="
+    for (var id of ids) {
+      d3.text(`${baseUrl}${id}`, handlePart).then(handlePart)
+    }
+  }
+  getAllData()
+
+
+
+
+</script>
+
+
+
+<script>
+
+/*
+data = hierarchy([
+  {
+    "name":"flare.analytics.cluster.AgglomerativeCluster",
+    "size":3938,
+    "imports":[]
+  },
+  {
+    "name":"flare.analytics.cluster.bbb",
+    "size":3938,
+    "imports":[]
+  },
+])*/
+
+function hierarchy(data, delimiter = ".") {
+  let root;
+  const map = new Map;
+  data.forEach(function find(data) {
+    const {name} = data;
+    if (map.has(name)) return map.get(name);
+    const i = name.lastIndexOf(delimiter);
+    map.set(name, data);
+    if (i >= 0) {
+      find({name: name.substring(0, i), children: []}).children.push(data);
+      data.name = name.substring(i + 1);
+    } else {
+      root = data;
+    }
+    return data;
+  });
+  return root;
+}
+function bilink(root) {
+  const map = new Map(root.leaves().map(d => [id(d), d]));
+  for (const d of root.leaves()) d.incoming = [], d.outgoing = d.data.imports.map(i => [d, map.get(i)]);
+  for (const d of root.leaves()) for (const o of d.outgoing) o[1].incoming.push(o);
+  return root;
+}
+function id(node) {
+  return `${node.parent ? id(node.parent) + "." : ""}${node.data.name}`;
+}
+colorin = "#00f"
+colorout = "#f00"
+colornone = "#ccc"
+
+
+
+
+function ellipsize(s) {
+  if (s.length > 15) {
+    return s.slice(0, 13) + "..."
+  }
+  return s
+}
+
+
+function chart() {
+  
+  console.log('plotting')
+  width = 500;//d3.select("#arc-graph-container").node().getBoundingClientRect().width
+  radius = width / 2
+  d3.select("#arc-graph").remove();
+
+  line = d3.lineRadial()
+    .curve(d3.curveBundle.beta(0.85))
+    .radius(d => d.y)
+    .angle(d => d.x)
+tree = d3.cluster()
+    .size([2 * Math.PI, radius - 100])
+
+  const root = tree(bilink(d3.hierarchy(data)
+      .sort((a, b) => d3.ascending(a.height, b.height) || d3.ascending(a.data.name, b.data.name))));
+        
+  const svg = d3.select("#arc-graph-container").append("svg").property("id", "arc-graph")
+      .attr("viewBox", [-width / 2, -width / 2, width, width]);
+
+  let num = data.children.reduce((cur, prev) => cur + (prev.children||[]).length, 0)
+  fontSize = 12
+  console.log(num);
+  if (num > 50) {
+    fontSize = 12 - Math.min(9, num / 25)
+  }
+
+  const node = svg.append("g")
+      .attr("font-family", "sans-serif")
+      .attr("font-size", fontSize + "px")
+    .selectAll("g")
+    .data(root.leaves())
+    .join("g")
+      .attr("transform", d => `rotate(${d.x * 180 / Math.PI - 90}) translate(${d.y},0)`)
+    .append("text")
+      .attr("dy", "0.31em")
+      .attr("x", d => d.x < Math.PI ? 6 : -6)
+      .attr("text-anchor", d => d.x < Math.PI ? "start" : "end")
+      .attr("transform", d => d.x >= Math.PI ? "rotate(180)" : null)
+      .text(d => ellipsize(d.data.name))
+      .each(function(d) { d.text = this; })
+      .on("mouseover", overed)
+      .on("mouseout", outed)
+      .call(text => text.append("title").text(d => `${id(d)}
+${d.outgoing.length} outgoing
+${d.incoming.length} incoming`));
+
+  const link = svg.append("g")
+      .attr("stroke", colornone)
+      .attr("fill", "none")
+    .selectAll("path")
+    .data(root.leaves().flatMap(leaf => leaf.outgoing))
+    .join("path")
+      .style("mix-blend-mode", "multiply")
+      .attr("d", ([i, o]) => line(i.path(o)))
+      .each(function(d) { d.path = this; });
+
+  function overed(event, d) {
+    link.style("mix-blend-mode", null);
+    d3.select(this).attr("font-weight", "bold");
+    d3.selectAll(d.incoming.map(d => d.path)).attr("stroke", colorin).raise();
+    d3.selectAll(d.incoming.map(([d]) => d.text)).attr("fill", colorin).attr("font-weight", "bold");
+    d3.selectAll(d.outgoing.map(d => d.path)).attr("stroke", colorout).raise();
+    d3.selectAll(d.outgoing.map(([, d]) => d.text)).attr("fill", colorout).attr("font-weight", "bold");
+  }
+
+  function outed(event, d) {
+    link.style("mix-blend-mode", "multiply");
+    d3.select(this).attr("font-weight", null);
+    d3.selectAll(d.incoming.map(d => d.path)).attr("stroke", null);
+    d3.selectAll(d.incoming.map(([d]) => d.text)).attr("fill", null).attr("font-weight", null);
+    d3.selectAll(d.outgoing.map(d => d.path)).attr("stroke", null);
+    d3.selectAll(d.outgoing.map(([, d]) => d.text)).attr("fill", null).attr("font-weight", null);
+  }
+
+  return svg.node();
+}
+///chart()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</script>
+
+
+</html>

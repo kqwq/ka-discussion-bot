@@ -5,6 +5,7 @@ const { svg2png } = require('svg-png-converter')
 const { KAAS } = require('./config')
 
 let allContent = []
+let hotlistIds = []
 let programContent = []
 var cringe = null; // Active cringe
 var msgGlobal = null;
@@ -90,51 +91,34 @@ const sendLater = async(avatarSrc) => {
   embedGlobal = null;
 }
 
-function addPost(post, type) {
-  allContent.push({
-    content: post.content,
-    type: type,
-    authorKaid: post.authorKaid,
-    votes: post.sumVotesIncremented,
-    flags: post.flags,
-    lowQualityScore: post.lowQualityScore,
-    link: `https://www.khanacademy.org/cs/i/${post.permalink.slice(post.permalink.length-16)}?qa_expand_key=${post.expandKey}`,
-  });
-  if (post.replyCount) {
-    fetchComment(post.key, (c) => {
-      for (let comment of c) {
-        allContent.push({
-          content: comment.content,
-          type: "comment",
-          authorKaid: comment.authorKaid,
-          votes: comment.sumVotesIncremented,
-          flags: comment.flags,
-          lowQualityScore: comment.lowQualityScore,
-          link: `https://www.khanacademy.org/cs/i/${post.permalink.slice(post.permalink.length-16)}?qa_expand_key=${post.expandKey}`,
-        });
-      }
-    })
+function addPost(post, type, dbContent, toKaid, toNick) {
+  dbContent = dbContent || allContent
+  if (toKaid == undefined) {
+    toKaid = ""
+    toNick = ""
   }
-}
-
-function addPostToProgramDB(post, type) {
-  programContent.push({
+  dbContent.push({
     content: post.content,
     type: type,
     authorKaid: post.authorKaid,
+    authorNick: post.authorNickname,
+    toKaid: toKaid,
+    toNick: toNick,
     votes: post.sumVotesIncremented,
     flags: post.flags,
     lowQualityScore: post.lowQualityScore,
     link: `https://www.khanacademy.org/cs/i/${post.permalink.slice(post.permalink.length-16)}?qa_expand_key=${post.expandKey}`,
-
   });
   if (post.replyCount) {
     fetchComment(post.key, (c) => {
       for (let comment of c) {
-        programContent.push({
+        dbContent.push({
           content: comment.content,
           type: "comment",
           authorKaid: comment.authorKaid,
+          authorNick: comment.authorNickname,
+          toKaid: post.authorKaid,
+          toNick: post.authorNickname,
           votes: comment.sumVotesIncremented,
           flags: comment.flags,
           lowQualityScore: comment.lowQualityScore,
@@ -195,15 +179,19 @@ function partString (str, parts) {
   return r
 }
 
+
 function finishFetching() {
     console.log("done fetching, now publishing to khanacademy.org")
-    let allContentStr = JSON.stringify(allContent, null, 2);
     allContent.sort((a, b) =>
-      a.lowQualityScore > b.lowQualityScore ? 1 : -1
+      a.votes - b.votes
     );
+    let allContentWrite = JSON.stringify({
+      hotlistIds: hotlistIds,
+      posts: allContent
+    });
     fs.writeFileSync(
       `${FILE_PATH}.json`,
-      allContentStr,
+      allContentWrite,
       "utf8"
     );
     fs.writeFileSync(
@@ -212,7 +200,7 @@ function finishFetching() {
       "utf8"
     );
 
-    let parts = partString(allContentStr, 3)
+    let parts = partString(allContentWrite, 3)
     updateProgram(4642706347212800, parts[0], "1")
     updateProgram(5209553899569152, parts[1], "2")
     updateProgram(4628192444760064, parts[2], "3")
@@ -227,6 +215,7 @@ module.exports = {
   fetchAll: () => {
     allContent = [];
     fetchHotlist((d) => {
+      hotlistIds = d.scratchpads.map(s => s.url.slice(s.url.length-16))
       let timer = 0
       for (let scratchpad of d.scratchpads) {
         setTimeout(() => {
@@ -235,15 +224,15 @@ module.exports = {
           fetchProject(scratchpad.url.slice(scratchpad.url.length - 16), (d) => {
             fetchQuestions(d.id, (d) => {
               for (let question of d.feedback) {
-                addPost(question, "question");
+                addPost(question, "question", allContent);
                 for (let answer of question.answers) {
-                  addPost(answer, "answer");
+                  addPost(answer, "answer", allContent, question.authorKaid, question.authorNickname);
                 }
               }
             });
             fetchTTs(d.id, (d) => {
               for (let tAndT of d.feedback) {
-                addPost(tAndT, "tips & thanks");
+                addPost(tAndT, "tips & thanks", allContent);
               }
             });
           });
@@ -412,15 +401,15 @@ module.exports = {
     fetchProject(id, (d) => {
       fetchQuestions(d.id, (d) => {
         for (let question of d.feedback) {
-          addPostToProgramDB(question, "question");
+          dbContent(question, "question", programContent);
           for (let answer of question.answers) {
-            addPostToProgramDB(answer, "answer");
+            dbContent(answer, "answer", programContent);
           }
         }
       });
       fetchTTs(d.id, (d) => {
         for (let tAndT of d.feedback) {
-          addPostToProgramDB(tAndT, "tips & thanks");
+          dbContent(tAndT, "tips & thanks", programContent);
         }
       });
     });
