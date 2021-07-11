@@ -3,6 +3,8 @@ const client = new Discord.Client();
 
 const { fetchAll, logData, getCringe, readFromFile, download, search, helpPage, program, getLeaderboard } = require("./commands")
 const { TOKEN, OWNER_ID } = require("./config")
+const schedule = require('node-schedule');
+const fs = require('fs');
 
 let outWebhook = null
 
@@ -118,3 +120,11 @@ setInterval(() => {
   console.log('auto-updating')
   fetchAll()
 }, 1 * 60 * 60 * 1000 * 4); // 4 hours
+
+// Schedule daily
+schedule.scheduleJob('0 0 * * *', () => {
+  console.log('downloading logs')
+  let currentDate = new Date().toDateString()
+  fs.copyFileSync('./data.json', './logs/data_' + currentDate + '.json')
+  console.log('done')
+})

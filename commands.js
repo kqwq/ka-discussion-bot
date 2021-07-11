@@ -535,7 +535,7 @@ module.exports = {
       .setFooter(
         "Source: Top 100 projects on the hotlist\nLast updated " +
           hoursDiff +
-          " hours ago"
+          " hours ago - discussion snapshot taken every 24 hours"
       );
     msg.reply(embed);
   },
