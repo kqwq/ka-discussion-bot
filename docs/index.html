@@ -96,8 +96,8 @@ function updateArcGraph() {
     let positionOnHotlist = hotlistIds.indexOf(entry.link.split(/[/?]/)[5])
     if (positionOnHotlist < minVal || positionOnHotlist > maxVal) continue
     if (!allowedTypes[entry.type]) continue
-    let authorPlus = "nick." +  categorizeWithPrefix(entry.authorNick)
-    let toPlus =  "nick." + categorizeWithPrefix(entry.toNick)
+    let authorPlus = "nick." +  (entry.authorKaid)
+    let toPlus =  "nick." + (entry.toKaid)
     if (nicks.has(authorPlus)) {
       doubleNicks.add(authorPlus)
       let match = tmpData.find(dat => dat.name === authorPlus)
@@ -244,7 +244,7 @@ tree = d3.cluster()
     .size([2 * Math.PI, radius - 100])
 
   const root = tree(bilink(d3.hierarchy(data)
-      .sort((a, b) => d3.ascending(a.height, b.height) || d3.ascending(a.data.name, b.data.name))));
+      .sort((a, b) => d3.ascending(b.data.size, a.data.size))));
         
   const svg = d3.select("#arc-graph-container").append("svg").property("id", "arc-graph")
       .attr("viewBox", [-width / 2, -width / 2, width, width]);
